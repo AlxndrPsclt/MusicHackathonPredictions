@@ -2,10 +2,14 @@
 # -*- coding: utf-8 -*-
 
 import csv
+import os
 import re
-import itertools
+import itertools as it
 import pprint
 pp = pprint.PrettyPrinter(indent=2)
+
+import tempfile
+
 from sknn.platform import cpu64, threading
 from sknn.mlp import Regressor, Layer
 import sys
@@ -24,13 +28,15 @@ from sklearn import cross_validation
 from sklearn.metrics import mean_squared_error as MSE
 
 from joblib import Parallel, delayed
+from joblib import load, dump
+
 
 
 import numpy as np
 import pandas as pd
 
 
-NN_ITERATIONS=1
+NN_ITERATIONS=100
 CV_ITERATIONS=2
 
 file_in_users=open("/home/pascault/data/users_res.csv","r")
@@ -47,14 +53,6 @@ categories_users = reader_users.next()
 categories_train = reader_train.next()
 
 
-def getMasks(categories, keywords):
-    mask=map(lambda x: x in keywords, categories)
-    antimask=map(lambda x: not x, mask)
-    return (mask, antimask)
-
-mask_words, antimask_words = getMasks(categories_words, ["Artist", "User"])
-mask_users, antimask_users = getMasks(categories_users, ["User"])
-mask_train, antimask_train = getMasks(categories_train, ["Artist", "User"])
 
 words = pd.DataFrame([ map(lambda x: float(x), row) for row in reader_words], columns=categories_words)
 users = pd.DataFrame([ map(lambda x: float(x), row) for row in reader_users], columns=categories_users)
@@ -70,15 +68,8 @@ del(users)
 del(joined1)
 
 pp.pprint(attributes[:10])
-
-#words = { (row[0], row[1]) : list(itertools.compress(row,mask_words)) for row in reader_words }
-#users = { row[0] : list(itertools.compress(row,mask_users)) for row in reader_users }
-#train = { (row[0], row[2]) : list(itertools.compress(row,mask_train)) for row in reader_train }
-
 pp.pprint(attributes.Rating[:10])
-#attributes.Rating=attributes['Rating'].apply(lambda x: MinMaxScaler().fit_transform(x))
-#attributes.Rating=MinMaxScaler().fit_transform(attributes.Rating)
-#pp.pprint(attributes.Rating[:10])
+
 ratings=attributes.Rating.as_matrix()
 
 del attributes["Artist"]
@@ -87,21 +78,95 @@ del attributes["Rating"]
 attributes = attributes.as_matrix()
 
 
-#test_attributes = attributes[:5000]
-#test_ratings = ratings[:5000]
-
 print("#######################")
 
-#attributes_train, attributes_test, ratings_train, ratings_test = cross_validation.train_test_split(attributes, ratings, test_size=0.10, random_state=42)
 
-nn = Regressor(
-    layers=[
-        Layer("Sigmoid", units=40),
-        Layer("Sigmoid", units=20),
-        Layer("Sigmoid", units=8),
-        Layer("Linear")],
-    learning_rate=0.02,
-    n_iter=NN_ITERATIONS)
+#####Choosing the coeff to run the tests
+l1=[135, 110, 85, 60, 40, 30, 20, 10]
+l2=[60, 40, 30, 20, 10]
+
+l1=[50, 20, 10]
+l2=[20, 10]
+
+l1=range(8,31,2)
+l2=range(4,17,2)
+
+
+prod = list(it.product(l1,l2))
+
+satisfy = map(lambda (a,b): a>=2*b, prod)
+
+usefullCombinations = list(it.compress(prod, satisfy))
+
+usefullCombinations=[(12, 6), (16, 4), (16, 6), (22, 6), (22, 10), (24, 6), (24, 12), (28, 6)]
+
+
+
+def trainAndTest(l1,l2,i,bestRMSEOutput, meanRMSEOutput):
+    nn = Regressor(
+        layers=[
+            Layer("Sigmoid", units=l1),
+            Layer("Sigmoid", units=l2),
+            Layer("Linear")],
+        learning_rate=0.02,
+        n_iter=NN_ITERATIONS)
+
+    #CrossvalidationMode
+    #scores = cross_validation.cross_val_score(nn, attributes, ratings, scoring='mean_squared_error', cv=CV_ITERATIONS)
+
+    #No Crossvalidation; run only once on random split data
+    scores=[]
+    attributes_train, attributes_test, ratings_train, ratings_test = cross_validation.train_test_split(attributes, ratings, test_size=0.10, random_state=42)
+
+    print(len(attributes_train))
+    print(len(attributes_test))
+    print(len(ratings_train))
+    print(len(ratings_test))
+
+    nn.fit(attributes_train, ratings_train)
+    ratings_result = nn.predict(attributes_test)
+
+    mse = MSE(ratings_test, ratings_result)**.5
+    scores.append(mse)
+
+#    print("Scores for "+str(l1)+" "+str(l2)+" :")
+    scores_a=(abs(np.array(scores))*10000)
+    scores_a=scores_a**.5
+
+    bestRMSEOutput[i]=scores_a.min()
+    meanRMSEOutput[i]=scores_a.mean()
+
+
+folder = tempfile.mkdtemp()
+bestRMSE_name = os.path.join(folder, 'bestRMSE')
+bestRMSE = np.memmap(bestRMSE_name, dtype=np.dtype(float), shape=(len(usefullCombinations),), mode='w+')
+meanRMSE_name = os.path.join(folder, 'meanRMSE')
+meanRMSE = np.memmap(meanRMSE_name, dtype=np.dtype(float), shape=(len(usefullCombinations),), mode='w+')
+
+#trainAndTest(22,10,0, bestRMSE, meanRMSE)
+Parallel(n_jobs=8)(delayed(trainAndTest)(l1,l2,i, bestRMSE, meanRMSE) for (i,(l1,l2)) in enumerate(usefullCombinations))
+
+print("Tested configurations :")
+print(usefullCombinations)
+
+print("Best RMSE :")
+print(bestRMSE)
+
+print("Mean RMSE :")
+print(meanRMSE)
+
+print("Best confguration :")
+print(bestRMSE.min())
+print(usefullCombinations[bestRMSE.argmin()])
+
+#nn = Regressor(
+    #layers=[
+        #Layer("Sigmoid", units=40),
+        #Layer("Sigmoid", units=20),
+        #Layer("Sigmoid", units=8),
+        #Layer("Linear")],
+    #learning_rate=0.02,
+    #n_iter=NN_ITERATIONS)
 
 #pipeline = Pipeline([
 #        ('min/max scaler', MinMaxScaler(feature_range=(0.0, 1.0))),
@@ -109,7 +174,7 @@ nn = Regressor(
 
 #pipeline.fit(attributes_train, ratings_train)
 
-scores = cross_validation.cross_val_score(nn, attributes, ratings, scoring='mean_squared_error', cv=CV_ITERATIONS)
+#scores = cross_validation.cross_val_score(nn, attributes, ratings, scoring='mean_squared_error', cv=CV_ITERATIONS)
 
 #print("Predicted values :")
 #ratings_result = pipeline.predict(attributes_test)
@@ -126,9 +191,9 @@ scores = cross_validation.cross_val_score(nn, attributes, ratings, scoring='mean
 #rmse = MSE(100*ratings_test, 100*ratings_result)**.5
 #print("RMSE = "+str(rmse))
 
-print("Scores :")
-scores_a=(-np.array(scores)*10000)
-scores_a=scores_a**.5
-print(scores_a)
-print("Mean score :")
-print(np.array(scores_a).mean())
+#print("Scores :")
+#scores_a=(-np.array(scores)*10000)
+#scores_a=scores_a**.5
+#print(scores_a)
+#print("Mean score :")
+#print(np.array(scores_a).mean())
