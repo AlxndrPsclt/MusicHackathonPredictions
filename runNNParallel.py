@@ -36,8 +36,8 @@ import numpy as np
 import pandas as pd
 
 
-NN_ITERATIONS=100
-CV_ITERATIONS=2
+NN_ITERATIONS=14
+CV_ITERATIONS=6
 
 file_in_users=open("/home/pascault/data/users_res.csv","r")
 reader_users = csv.reader(file_in_users)
@@ -112,24 +112,24 @@ def trainAndTest(l1,l2,i,bestRMSEOutput, meanRMSEOutput):
         n_iter=NN_ITERATIONS)
 
     #CrossvalidationMode
-    #scores = cross_validation.cross_val_score(nn, attributes, ratings, scoring='mean_squared_error', cv=CV_ITERATIONS)
+    scores = cross_validation.cross_val_score(nn, attributes, ratings, scoring='mean_squared_error', cv=CV_ITERATIONS)
 
     #No Crossvalidation; run only once on random split data
-    scores=[]
-    attributes_train, attributes_test, ratings_train, ratings_test = cross_validation.train_test_split(attributes, ratings, test_size=0.10, random_state=42)
+    #scores=[]
+    #attributes_train, attributes_test, ratings_train, ratings_test = cross_validation.train_test_split(attributes, ratings, test_size=0.10, random_state=42)
 
-    print(len(attributes_train))
-    print(len(attributes_test))
-    print(len(ratings_train))
-    print(len(ratings_test))
+    #print(len(attributes_train))
+    #print(len(attributes_test))
+    #print(len(ratings_train))
+    #print(len(ratings_test))
 
-    nn.fit(attributes_train, ratings_train)
-    ratings_result = nn.predict(attributes_test)
+#    nn.fit(attributes_train, ratings_train)
+#    ratings_result = nn.predict(attributes_test)
+#
+#    mse = MSE(ratings_test, ratings_result)**.5
+#    scores.append(mse)
 
-    mse = MSE(ratings_test, ratings_result)**.5
-    scores.append(mse)
-
-#    print("Scores for "+str(l1)+" "+str(l2)+" :")
+    print("Scores for "+str(l1)+" "+str(l2)+" :")
     scores_a=(abs(np.array(scores))*10000)
     scores_a=scores_a**.5
 
