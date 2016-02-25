@@ -10,15 +10,18 @@ pp = pprint.PrettyPrinter(indent=2)
 
 import tempfile
 
-from sknn.platform import cpu64, threading
+from sknn.platform import cpu64, threading8
 from sknn.mlp import Regressor, Layer
 import sys
 
-import logging
-logging.basicConfig(
-            format="%(message)s",
-            level=logging.DEBUG,
-            stream=sys.stdout)
+#import logging
+#logging.basicConfig(
+#            format="%(message)s",
+#            level=logging.DEBUG,
+#            stream=sys.stdout)
+
+from scipy import stats
+from sklearn.grid_search import RandomizedSearchCV
 
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import MinMaxScaler
@@ -97,7 +100,11 @@ usefullCombinations = list(it.compress(prod, satisfy))
 
 #usefullCombinations=[(12, 6), (16, 4), (16, 6), (22, 6), (22, 10), (24, 6), (24, 12), (28, 6)]
 
+usefullCombinations=[(40, 15), (10, 5)]
 
+learningRates = np.array(range(5,25,5)+range(25,100,14))/1000.
+
+nnCycles = range(10,30,2)
 
 def trainAndTest(l1,l2,i,bestRMSEOutput, meanRMSEOutput):
     nn = Regressor(
@@ -134,45 +141,64 @@ def trainAndTest(l1,l2,i,bestRMSEOutput, meanRMSEOutput):
     meanRMSEOutput[i]=scores_a.mean()
 
 
-folder = tempfile.mkdtemp()
-bestRMSE_name = os.path.join(folder, 'bestRMSE')
-bestRMSE = np.memmap(bestRMSE_name, dtype=np.dtype(float), shape=(len(usefullCombinations),), mode='w+')
-meanRMSE_name = os.path.join(folder, 'meanRMSE')
-meanRMSE = np.memmap(meanRMSE_name, dtype=np.dtype(float), shape=(len(usefullCombinations),), mode='w+')
+#folder = tempfile.mkdtemp()
+#bestRMSE_name = os.path.join(folder, 'bestRMSE')
+#bestRMSE = np.memmap(bestRMSE_name, dtype=np.dtype(float), shape=(len(usefullCombinations),), mode='w+')
+#meanRMSE_name = os.path.join(folder, 'meanRMSE')
+#meanRMSE = np.memmap(meanRMSE_name, dtype=np.dtype(float), shape=(len(usefullCombinations),), mode='w+')
 
 #trainAndTest(22,10,0, bestRMSE, meanRMSE)
-Parallel(n_jobs=8)(delayed(trainAndTest)(l1,l2,i, bestRMSE, meanRMSE) for (i,(l1,l2)) in enumerate(usefullCombinations))
+nn = Regressor(
+    layers=[
+        Layer("Sigmoid", units=10),
+        Layer("Sigmoid", units=10),
+        Layer("Linear")],
+    learning_rate=0.02,
+    n_iter=NN_ITERATIONS)
 
-print("Tested configurations :")
-print(usefullCombinations)
-
-print("Best RMSE :")
-print(bestRMSE)
-
-print("Mean RMSE :")
-print(meanRMSE)
-
-print("Best confguration :")
-print(bestRMSE.min())
-print(usefullCombinations[bestRMSE.argmin()])
+attributes_train, attributes_test, ratings_train, ratings_test = cross_validation.train_test_split(attributes, ratings, test_size=0.10, random_state=42)
+rs = RandomizedSearchCV(nn, param_distributions={
+    'learning_rate': stats.uniform(0.001, 0.05),
+    'hidden0__units': stats.randint(12, 60),
+    'hidden1__units': stats.randint(5, 20),
+    'hidden0__type': ["Rectifier", "Sigmoid", "Tanh"],
+    'hidden1__type': ["Rectifier", "Sigmoid", "Tanh"]},
+    n_jobs=4)
+rs.fit(attributes_train, ratings_train)
 
 
-fileO=open('/home/pascault/data/res/nnHiddenLayersComparison.txt','w')
-
-indicesBestMean = np.argpartition(meanRMSE, -4)[:4]
-
-for ind in indicesBestMean:
-    fileO.write('Best Model : '+ str(usefullCombinations[ind])+'\n')
-    fileO.write('RMSE : '+ str(meanRMSE[ind])+'\n')
-    fileO.write('*'*25+'\n')
-
-for (i, conf) in enumerate(usefullCombinations):
-    fileO.write(str(conf)+'\n')
-    fileO.write(str(bestRMSE[i])+'\n')
-    fileO.write(str(meanRMSE[i])+'\n')
-    fileO.write('-'*16+'\n')
-
-fileO.close()
+#Parallel(n_jobs=8)(delayed(trainAndTest)(l1,l2,i, bestRMSE, meanRMSE) for (i,(l1,l2)) in enumerate(usefullCombinations))
+#
+#print("Tested configurations :")
+#print(usefullCombinations)
+#
+#print("Best RMSE :")
+#print(bestRMSE)
+#
+#print("Mean RMSE :")
+#print(meanRMSE)
+#
+#print("Best confguration :")
+#print(bestRMSE.min())
+#print(usefullCombinations[bestRMSE.argmin()])
+#
+#
+#fileO=open('/home/pascault/data/res/nnHiddenLayersComparison.txt','w')
+#
+#indicesBestMean = np.argpartition(meanRMSE, -4)[:4]
+#
+#for ind in indicesBestMean:
+#    fileO.write('Best Model : '+ str(usefullCombinations[ind])+'\n')
+#    fileO.write('RMSE : '+ str(meanRMSE[ind])+'\n')
+#    fileO.write('*'*25+'\n')
+#
+#for (i, conf) in enumerate(usefullCombinations):
+#    fileO.write(str(conf)+'\n')
+#    fileO.write(str(bestRMSE[i])+'\n')
+#    fileO.write(str(meanRMSE[i])+'\n')
+#    fileO.write('-'*16+'\n')
+#
+#fileO.close()
     
 
 #nn = Regressor(
