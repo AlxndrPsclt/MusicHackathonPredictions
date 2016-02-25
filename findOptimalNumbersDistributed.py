@@ -41,7 +41,7 @@ import numpy as np
 import pandas as pd
 
 
-NN_ITERATIONS=8
+NN_ITERATIONS=10
 CV_ITERATIONS=5
 
 file_in_users=open("/home/pascault/data/users_res.csv","r")
@@ -108,11 +108,15 @@ learningRates = np.array(range(5,25,5)+range(25,100,14))/1000.
 
 nnCycles = range(10,30,2)
 
+def my_callback(event, **variables):
+    print(event)        # The name of the event, as shown in the list above.
+    print(variables)    # Full dictionary of local variables from training loop
+
 def trainAndTest(l1,l2,i,bestRMSEOutput, meanRMSEOutput):
     nn = Regressor(
         layers=[
-            Layer("Sigmoid", units=l1),
-            Layer("Sigmoid", units=l2),
+            Layer("Rectifier", units=l1),
+            Layer("Tanh", units=l2),
             Layer("Linear")],
         learning_rate=0.02,
         n_iter=NN_ITERATIONS)
@@ -148,6 +152,8 @@ def trainAndTest(l1,l2,i,bestRMSEOutput, meanRMSEOutput):
 #bestRMSE = np.memmap(bestRMSE_name, dtype=np.dtype(float), shape=(len(usefullCombinations),), mode='w+')
 #meanRMSE_name = os.path.join(folder, 'meanRMSE')
 #meanRMSE = np.memmap(meanRMSE_name, dtype=np.dtype(float), shape=(len(usefullCombinations),), mode='w+')
+#duringTrainingRMSE_names = [os.path.join(folder, 'duringTrainingRMSE'+str(i)) for i in range(8)]
+#duringTrainingRMSE = [np.memmap(meanRMSE_name[i], dtype=np.dtype(float), shape=(NN_ITERATIONS), mode='w+')]
 
 #trainAndTest(22,10,0, bestRMSE, meanRMSE)
 nn = Regressor(
@@ -167,9 +173,12 @@ attributes_train, attributes_test, ratings_train, ratings_test = cross_validatio
 #    'hidden1__type': ["Rectifier", "Sigmoid", "Tanh"]},
 #    n_jobs=4)
 #rs.fit(attributes_train, ratings_train)
+l1=range(30,60)
+chunksL1=[l1[i:i+len(l1)/10] for i in xrange(0, len(l1), len(l1)/10)]
+
 
 gs = GridSearchCV(nn, param_grid={
-    'hidden0__units': range(35,50),
+    'hidden0__units': range(39,51),
     'hidden1__units': range(7,14)})
 gs.fit(attributes_train, ratings_train)
 
